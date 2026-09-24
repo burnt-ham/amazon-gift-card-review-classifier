@@ -1,0 +1,29 @@
+# --- large / re-downloadable data ---
+Gift_Cards.jsonl.gz
+nrc/
+nrc.zip
+
+# --- assignment / scratch (not part of the deliverable) ---
+assignment_final.pdf
+assign_page_*.png
+
+# --- incremental dashboard history (final deliverable is v5) ---
+Gift_Card_Classifier_Dashboard.html
+Gift_Card_Classifier_Dashboard_v2.html
+Gift_Card_Classifier_Dashboard_v3.html
+Gift_Card_Classifier_Dashboard_v4.html
+generate_dashboard.py
+generate_dashboard3.py
+
+# --- one-off / non-final analysis files ---
+classify_emotions.py
+emotion_results.json
+gift_card_classifications.json
+make_spotcheck.py
+
+# --- local helper, not a deliverable ---
+screenshot_dashboard.py
+
+# --- python cache ---
+__pycache__/
+*.pyc

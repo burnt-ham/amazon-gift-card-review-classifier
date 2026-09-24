@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gift Card Review Classifier — Three-Class Sentiment &amp; Emotion</title>
+<style>
+  :root {
+    --paper:#f5f4f0; --surface:#ffffff;
+    --ink:#181c22; --muted:#5d6670; --faint:#8a9199;
+    --line:#e2dfd8; --line-strong:#cfcbc1;
+    --ok:#1f7a5c; --ok-soft:#e3f0eb;      /* positive */
+    --neu:#a57a1d; --neu-soft:#f5ecd6;    /* neutral  */
+    --bad:#b0503c; --bad-soft:#f7e7e2;    /* negative */
+    --em:#2a5aa8; --em-soft:#e7eef8;
+    --ncr:#7a5aa0; --ncr-soft:#f0eaf6;
+    --serif:"Iowan Old Style","Palatino Linotype","Book Antiqua",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body { background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  .wrap { max-width:1060px; margin:0 auto; padding:56px 28px 72px; }
+
+  .eyebrow { font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--faint); font-weight:600; margin:0 0 10px; }
+  .masthead { border-top:3px solid var(--ink); padding-top:20px; }
+  .masthead .rule { border-bottom:1px solid var(--line-strong); }
+  h1 { font-family:var(--serif); font-weight:600; font-size:clamp(30px,4.6vw,50px); line-height:1.05; letter-spacing:-.015em; margin:0 0 12px; max-width:24ch; }
+  .lede { font-size:17px; color:var(--muted); max-width:72ch; margin:0 0 6px; }
+  .meta-line { font-family:var(--mono); font-size:12px; color:var(--faint); }
+
+  .kpis { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; border-top:1px solid var(--line-strong); margin:40px 0 6px; }
+  .kpi { padding:18px 22px 18px 0; border-bottom:1px solid var(--line); }
+  .kpi + .kpi { border-left:1px solid var(--line); padding-left:24px; }
+  .kpi .num { font-family:var(--serif); font-weight:600; font-size:38px; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:-.02em; }
+  .kpi .num .unit { font-size:18px; color:var(--muted); }
+  .kpi .lab { font-size:12px; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; margin-top:8px; }
+  #kpiPos .num { color:var(--ok); } #kpiNeu .num { color:var(--neu); } #kpiNeg .num { color:var(--bad); }
+
+  section { margin-top:64px; }
+  .kicker { font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin:0 0 6px; }
+  h2 { font-family:var(--serif); font-weight:600; font-size:28px; letter-spacing:-.01em; margin:0 0 8px; }
+  .sub { color:var(--muted); max-width:70ch; margin:0 0 26px; }
+
+  .panel { display:grid; grid-template-columns:240px 1fr; gap:52px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:30px 34px; align-items:center; }
+  .donut-wrap { text-align:center; }
+  .donut { position:relative; width:200px; height:200px; margin:0 auto 6px; }
+  .donut svg { transform:rotate(-90deg); }
+  .donut .center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .donut .center .big { font-family:var(--serif); font-size:44px; font-weight:600; line-height:1; }
+  .donut .center .cap { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--faint); margin-top:4px; }
+  .legend { display:flex; gap:18px; justify-content:center; font-size:12px; color:var(--muted); margin-top:10px; }
+  .legend span { display:inline-flex; align-items:center; gap:7px; }
+  .sw { width:11px; height:11px; border-radius:3px; display:inline-block; }
+
+  .class-bars { display:grid; gap:24px; }
+  .cbar .row { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .cbar .clab { font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; }
+  .cbar .cval { font-family:var(--mono); font-size:12px; color:var(--muted); }
+  .dot { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .dot.positive { background:var(--ok); } .dot.neutral { background:var(--neu); } .dot.negative { background:var(--bad); }
+  .track { display:flex; height:34px; border-radius:8px; overflow:hidden; background:var(--line); }
+  .track .pseg { height:100%; }
+  .pseg.seg-ok { background:var(--ok); } .pseg.seg-neu { background:var(--neu); } .pseg.seg-bad { background:var(--bad); }
+  .track-note { margin-top:8px; font-size:12px; color:var(--faint); }
+
+  .miss-list { display:grid; gap:16px; }
+  .miss { position:relative; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px 22px 20px 24px; overflow:hidden; }
+  .miss-rail { position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--line-strong); }
+  .miss-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; }
+  .stars { color:#c9952f; letter-spacing:2px; font-size:14px; }
+  .chip { font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.04em; padding:3px 9px; border-radius:999px; }
+  .chip.ok { background:var(--ok-soft); color:var(--ok); }
+  .chip.neu { background:var(--neu-soft); color:var(--neu); }
+  .chip.bad { background:var(--bad-soft); color:var(--bad); }
+  .chip.nl { background:var(--em-soft); color:var(--em); }
+  .chip.nr { background:var(--ncr-soft); color:var(--ncr); }
+  .vs { color:var(--faint); font-size:12px; }
+  .arrow { color:var(--faint); }
+  .miss-title { font-family:var(--serif); font-size:19px; font-weight:600; margin:12px 0 4px; }
+  .miss-text { margin:0 0 10px; }
+  .miss-why { font-size:13.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:10px; margin:0; }
+  .miss-why b { color:var(--ink); }
+
+  .agree-band { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:24px 30px; margin-bottom:22px; display:flex; flex-wrap:wrap; gap:18px; align-items:baseline; }
+  .agree-num { font-family:var(--serif); font-weight:600; font-size:40px; line-height:1; color:var(--em); }
+  .agree-txt .ag { font-size:16px; font-weight:600; }
+  .agree-txt .an { color:var(--muted); font-size:13.5px; margin-top:4px; max-width:76ch; }
+  .dist-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .dist-panel { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px 24px; }
+  .dist-panel h4 { margin:0 0 4px; font-family:var(--serif); font-size:17px; font-weight:600; }
+  .dist-panel .cap { font-size:12px; color:var(--faint); margin-bottom:14px; }
+  .drow { display:grid; grid-template-columns:120px 1fr 34px; gap:10px; align-items:center; padding:3px 0; font-size:13px; }
+  .dbar { height:14px; border-radius:4px; background:var(--line); overflow:hidden; }
+  .dbar > div { height:100%; }
+  .dp-model .dbar > div { background:var(--em); }
+  .dp-nrc .dbar > div { background:var(--ncr); }
+  .dcnt { font-family:var(--mono); font-size:12px; color:var(--muted); text-align:right; }
+
+  .diff-list { display:grid; gap:14px; }
+  .diff { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 20px; }
+  .diff-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+  .diff-title { font-family:var(--serif); font-weight:600; font-size:16px; }
+  .diff-sent { margin-left:auto; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); }
+  .diff-mid { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .emo-box { display:flex; align-items:center; gap:9px; }
+  .emo-lab { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); }
+  .diff-why { margin:12px 0 0; font-size:13.5px; color:var(--muted); border-top:1px solid var(--line); padding-top:10px; }
+  .diff-why b { color:var(--ink); }
+
+  .controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .filters { display:grid; gap:10px; margin-bottom:16px; }
+  .frow { display:flex; align-items:center; gap:14px; flex-wrap:wrap; border-bottom:1px solid var(--line); padding-bottom:10px; }
+  .frow:last-child { border-bottom:none; padding-bottom:0; }
+  .flabel { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--faint); font-weight:600; min-width:74px; }
+  .countbar { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 18px; margin-bottom:16px; }
+  .bigcount { font-family:var(--serif); font-weight:600; font-size:22px; letter-spacing:-.01em; }
+  .bigcount .em { color:var(--ok); }
+  .countsub { font-size:13px; color:var(--muted); }
+  .countsub .m2 { color:var(--bad); font-weight:600; }
+  .countsub .ok2 { color:var(--ok); font-weight:600; }
+  .countsub .n3 { color:var(--neu); font-weight:600; }
+  .seg-btn { appearance:none; border:1px solid var(--line-strong); background:var(--surface); color:var(--muted); font-family:var(--sans); font-size:13px; font-weight:600; padding:8px 14px; border-radius:999px; cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+  .seg-btn:hover { border-color:var(--ink); color:var(--ink); }
+  .seg-btn.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+
+  .table-wrap { background:var(--surface); border:1px solid var(--line); border-radius:14px; overflow:auto; max-height:640px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { position:sticky; top:0; background:#fbfaf7; text-align:left; z-index:2; font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); padding:11px 12px; border-bottom:1px solid var(--line-strong); font-weight:600; }
+  tbody td { padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.idx { font-family:var(--mono); color:var(--faint); font-size:12px; width:40px; }
+  td.stars { white-space:nowrap; font-size:12px; }
+  .pill { font-family:var(--mono); font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+  .pill.ok { background:var(--ok-soft); color:var(--ok); }
+  .pill.neu { background:var(--neu-soft); color:var(--neu); }
+  .pill.bad { background:var(--bad-soft); color:var(--bad); }
+  .pill.nl { background:var(--em-soft); color:var(--em); }
+  .pill.nr { background:var(--ncr-soft); color:var(--ncr); }
+  td.tt { max-width:330px; }
+  td.tt .t { font-weight:600; }
+  td.tt .x { color:var(--muted); font-size:12px; }
+  tr.missrow { background:var(--paper); }
+  tr.agX { background:#f3efe6; }
+  .legend2 { display:flex; gap:16px; font-size:12px; color:var(--muted); margin-bottom:12px; } .legend2 span { display:inline-flex; align-items:center; gap:6px; } .legend2 i { width:11px; height:11px; border-radius:3px; }
+
+  /* ---- descriptive layer ---- */
+  .glance-callout { background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--bad); border-radius:10px; padding:14px 18px; font-size:14px; color:var(--ink); margin-bottom:22px; }
+  .glance-callout b { color:var(--bad); }
+  .ov-grid { display:grid; grid-template-columns:1fr 1.2fr 1fr; gap:16px; }
+  .ov-card { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px 22px; }
+  .ov-card h4 { margin:0 0 4px; font-family:var(--serif); font-size:17px; font-weight:600; }
+  .ov-card .cap { font-size:12px; color:var(--faint); margin:0 0 16px; }
+
+  .stars-chart { display:flex; align-items:flex-end; gap:10px; }
+  .vcol { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+  .vcol .vval { font-family:var(--mono); font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .vcol .vbar { width:26px; height:110px; background:var(--line); border-radius:4px; overflow:hidden; position:relative; }
+  .vcol .vfill { position:absolute; left:0; right:0; bottom:0; }
+  .vcol .vlab { font-size:11px; color:var(--faint); margin-top:6px; }
+
+  .rp-chart { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .rp-group .rp-head { font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+  .rp-group .rp-nums { font-family:var(--mono); font-size:11px; color:var(--faint); font-weight:400; margin-left:auto; }
+  .rp-cols { display:flex; gap:12px; justify-content:center; align-items:flex-end; height:120px; }
+  .rp-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; }
+  .rp-col .vvar { font-family:var(--mono); font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .rp-col .vbar { width:22px; height:90px; background:var(--line); border-radius:4px; overflow:hidden; position:relative; }
+  .rp-col .vfill { position:absolute; left:0; right:0; bottom:0; background:var(--line-strong); }
+  .rp-col .vlab { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint); margin-top:5px; }
+  .rp-legend { display:flex; gap:16px; justify-content:center; margin-top:14px; font-size:12px; color:var(--muted); }
+  .rp-legend span { display:inline-flex; align-items:center; gap:6px; }
+
+  .acc-chart { display:grid; gap:14px; }
+  .abar-lab { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; font-size:13px; }
+  .abar-name { font-weight:600; display:inline-flex; align-items:center; gap:7px; }
+  .abar-v { font-family:var(--mono); font-size:12px; color:var(--muted); }
+  .abar { height:16px; background:var(--line); border-radius:4px; overflow:hidden; }
+  .abar-fill { height:100%; }
+
+  @media (max-width:900px){
+    .ov-grid { grid-template-columns:1fr; }
+  }
+
+  footer { margin-top:60px; padding-top:22px; border-top:1px solid var(--line-strong); display:grid; gap:6px; color:var(--faint); font-size:12.5px; }
+  footer .h { text-transform:uppercase; letter-spacing:.1em; font-size:11px; color:var(--muted); font-weight:600; }
+  footer p { margin:0; max-width:86ch; }
+  footer code { font-family:var(--mono); font-size:11.5px; background:var(--surface); padding:1px 5px; border-radius:4px; }
+
+  @media (max-width:840px) {
+    .kpis { grid-template-columns:1fr 1fr; }
+    .kpi + .kpi { border-left:none; }
+    .kpi:nth-child(3),.kpi:nth-child(4) { border-top:1px solid var(--line); }
+    .panel { grid-template-columns:1fr; gap:34px; }
+    .dist-grid { grid-template-columns:1fr; }
+  }
+  @media (prefers-reduced-motion:no-preference) { .masthead h1, .kpis .kpi, section { animation:fade .5s ease both; } }
+  @keyframes fade { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Amazon Gift Card Reviews &middot; Three-Class Sentiment &amp; Emotion</p>
+    <h1>102 of 150 balanced reviews matched the star rating.</h1>
+    <p class="lede">
+      Sentiment is now <b>three classes</b>: positive (4&ndash;5&#9733;), neutral (3&#9733;), negative
+      (1&ndash;2&#9733;). A model reads each review&rsquo;s <em>title and text only</em> and picks one class,
+      compared against the rating (used only as the correct answer, never shown to the model). Each review also
+      gets a <b>primary emotion</b> from the model and from the NRC word-list. To stop the rare classes being
+      swamped, the sample is balanced &mdash; 50 of each rating class &mdash; and picked with a fixed random seed.
+    </p>
+    <p class="meta-line">balanced sample of 150 reviews (50 per rating class) drawn with a fixed random seed (2026) so the same set appears every time &middot; offline dashboard &middot; rubric: 4&ndash;5 = positive, 3 = neutral, 1&ndash;2 = negative</p>
+    <div class="rule"></div>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi lead"><div class="num">102<span class="unit">/150 &middot; 68.0%</span></div><div class="lab">Overall match (3-class)</div></div>
+    <div class="kpi" id="kpiPos"><div class="num">35<span class="unit">/50 &middot; 70.0%</span></div><div class="lab">Positive matched</div></div>
+    <div class="kpi" id="kpiNeu"><div class="num">23<span class="unit">/50 &middot; 46.0%</span></div><div class="lab">Neutral matched</div></div>
+    <div class="kpi" id="kpiNeg"><div class="num">44<span class="unit">/50 &middot; 88.0%</span></div><div class="lab">Negative matched</div></div>
+  </div>
+
+  
+<section id="overview">
+  <p class="kicker">Descriptive layer &middot; at a glance</p>
+  <h2>Where the model succeeds — and where it fails</h2>
+  <p class="sub">
+    No drilling needed: this shows the exact star mix we scored, how the model&rsquo;s verdicts
+    compare with the rating-based answer, and how often each class is answered right. Green is the
+    positive class, amber the neutral, red the negative. The big story: <b>the model over-predicts
+    negative</b> and <b>stumbles hardest on neutral reviews</b>.
+  </p>
+
+  <div class="glance-callout">Most common miss: <b>26</b> — neutral reviews read as negative (54% of the 48 misses). Everything else below matches what you saw in the
+  individual rows.</div>
+
+  <div class="ov-grid">
+    <div class="ov-card ov-stars">
+      <h4>Star-rating distribution</h4>
+      <p class="cap">How the balanced sample is made up, by stars (coloured by class).</p>
+      <div class="stars-chart" style="--max:50"><div class="vcol"><div class="vval">43</div><div class="vbar"><div class="vfill" style="height:86.0%;background:var(--bad)"></div></div><div class="vlab">1&#9733;</div></div><div class="vcol"><div class="vval">7</div><div class="vbar"><div class="vfill" style="height:14.0%;background:var(--bad)"></div></div><div class="vlab">2&#9733;</div></div><div class="vcol"><div class="vval">50</div><div class="vbar"><div class="vfill" style="height:100.0%;background:var(--neu)"></div></div><div class="vlab">3&#9733;</div></div><div class="vcol"><div class="vval">2</div><div class="vbar"><div class="vfill" style="height:5.0%;background:var(--ok)"></div></div><div class="vlab">4&#9733;</div></div><div class="vcol"><div class="vval">48</div><div class="vbar"><div class="vfill" style="height:96.0%;background:var(--ok)"></div></div><div class="vlab">5&#9733;</div></div></div>
+    </div>
+
+    <div class="ov-card ov-rp">
+      <h4>Rating says vs. model predicted</h4>
+      <p class="cap">True class from the rating (grey) against what the model called them (class colour), per class.</p>
+      <div class="rp-chart"><div class="rp-group"><div class="rp-head"><i class="dot dot-positive"></i>Positive <span class="rp-nums">rating 50 &middot; model 36</span></div><div class="rp-cols"><div class="rp-col"><div class="vvar">50</div><div class="vbar"><div class="vfill" style="height:71.4%"></div></div><div class="vlab">rating</div></div><div class="rp-col"><div class="vvar">36</div><div class="vbar"><div class="vfill" style="height:51.4%;background:var(--ok)"></div></div><div class="vlab">model</div></div></div></div><div class="rp-group"><div class="rp-head"><i class="dot dot-neutral"></i>Neutral <span class="rp-nums">rating 50 &middot; model 44</span></div><div class="rp-cols"><div class="rp-col"><div class="vvar">50</div><div class="vbar"><div class="vfill" style="height:71.4%"></div></div><div class="vlab">rating</div></div><div class="rp-col"><div class="vvar">44</div><div class="vbar"><div class="vfill" style="height:62.9%;background:var(--neu)"></div></div><div class="vlab">model</div></div></div></div><div class="rp-group"><div class="rp-head"><i class="dot dot-negative"></i>Negative <span class="rp-nums">rating 50 &middot; model 70</span></div><div class="rp-cols"><div class="rp-col"><div class="vvar">50</div><div class="vbar"><div class="vfill" style="height:71.4%"></div></div><div class="vlab">rating</div></div><div class="rp-col"><div class="vvar">70</div><div class="vbar"><div class="vfill" style="height:100.0%;background:var(--bad)"></div></div><div class="vlab">model</div></div></div></div></div>
+      <div class="rp-legend"><span><i class="sw" style="background:var(--line-strong)"></i>rating says</span>
+        <span><i class="sw" style="background:var(--ok)"></i>model</span></div>
+    </div>
+
+    <div class="ov-card ov-acc">
+      <h4>How often each class was answered right</h4>
+      <p class="cap">Correct share of each class and overall.</p>
+      <div class="acc-chart"><div class="abar-row"><div class="abar-lab"><span class="abar-name"><i class="dot dot-positive"></i>Positive</span><span class="abar-v">70.0% &middot; 35 of 50 right</span></div><div class="abar"><div class="abar-fill" style="width:70.0%;background:var(--ok)"></div></div></div><div class="abar-row"><div class="abar-lab"><span class="abar-name"><i class="dot dot-neutral"></i>Neutral</span><span class="abar-v">46.0% &middot; 23 of 50 right</span></div><div class="abar"><div class="abar-fill" style="width:46.0%;background:var(--neu)"></div></div></div><div class="abar-row"><div class="abar-lab"><span class="abar-name"><i class="dot dot-negative"></i>Negative</span><span class="abar-v">88.0% &middot; 44 of 50 right</span></div><div class="abar"><div class="abar-fill" style="width:88.0%;background:var(--bad)"></div></div></div><div class="abar-row total"><div class="abar-lab"><span class="abar-name">Overall</span><span class="abar-v">68% &middot; 102 of 150 right</span></div><div class="abar"><div class="abar-fill" style="width:68.0%;background:var(--ink)"></div></div></div></div>
+    </div>
+  </div>
+</section>
+
+
+
+  <section id="rightwrong">
+    <p class="kicker">Sentiment &middot; right vs. wrong</p>
+    <h2>102 matched, 48 missed</h2>
+    <p class="sub">
+      Each bar shows one rating class and how the model labelled its reviews: green = called positive,
+      amber = neutral, red = negative. The coloured segment that matches the class is a hit.
+      Notice the weak spot: over half the truly-neutral (3-star) reviews were read as negative.
+    </p>
+    <div class="panel">
+      <div class="donut-wrap">
+        <div class="donut" id="donut"></div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--ok)"></i>matched</span>
+          <span><i class="sw" style="background:var(--bad)"></i>missed</span>
+        </div>
+      </div>
+      <div class="class-bars">
+      <div class="cbar">
+        <div class="row"><span class="clab"><i class="dot dot-positive"></i>Positive
+          <span style="color:var(--faint);font-weight:400">(50 reviews)</span></span>
+          <span class="cval">35 of 50 right &nbsp;·&nbsp; 70.0%</span></div>
+        <div class="track"><div class="pseg seg-ok" style="width:70.00%"></div><div class="pseg seg-neu" style="width:30.00%"></div><div class="pseg seg-bad" style="width:0.00%"></div></div>
+        <div class="track-note">Correct labels are amber/green/red by class; the grey shares are reviews the model called a different class. 15 read as neutral</div>
+      </div>
+
+      <div class="cbar">
+        <div class="row"><span class="clab"><i class="dot dot-neutral"></i>Neutral
+          <span style="color:var(--faint);font-weight:400">(50 reviews)</span></span>
+          <span class="cval">23 of 50 right &nbsp;·&nbsp; 46.0%</span></div>
+        <div class="track"><div class="pseg seg-ok" style="width:2.00%"></div><div class="pseg seg-neu" style="width:46.00%"></div><div class="pseg seg-bad" style="width:52.00%"></div></div>
+        <div class="track-note">Correct labels are amber/green/red by class; the grey shares are reviews the model called a different class. 1 read as positive; 26 read as negative</div>
+      </div>
+
+      <div class="cbar">
+        <div class="row"><span class="clab"><i class="dot dot-negative"></i>Negative
+          <span style="color:var(--faint);font-weight:400">(50 reviews)</span></span>
+          <span class="cval">44 of 50 right &nbsp;·&nbsp; 88.0%</span></div>
+        <div class="track"><div class="pseg seg-ok" style="width:0.00%"></div><div class="pseg seg-neu" style="width:12.00%"></div><div class="pseg seg-bad" style="width:88.00%"></div></div>
+        <div class="track-note">Correct labels are amber/green/red by class; the grey shares are reviews the model called a different class. 6 read as neutral</div>
+      </div></div>
+    </div>
+  </section>
+
+  <section id="smisses">
+    <p class="kicker">Sentiment &middot; example misses</p>
+    <h2>A look at the 48 reviews the model missed</h2>
+    <p class="sub">A representative handful (three per class), so you can read them yourself. The full list with every review is in the evidence table below.</p>
+    <div class="miss-list">
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★★★★★</span>
+            <span class="chip ok">Positive</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip neu">Neutral</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">It’s a gift card</h3>
+          <p class="miss-text">It’s a gift card, there is nothing else to say.</p>
+          <p class="miss-why"><b>Rating says Positive (★★★★★)</b>, but the model read the
+             title+text as <b>Neutral</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★★★★★</span>
+            <span class="chip ok">Positive</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip neu">Neutral</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">Five Stars</h3>
+          <p class="miss-text">Gift for brother-in-law.</p>
+          <p class="miss-why"><b>Rating says Positive (★★★★★)</b>, but the model read the
+             title+text as <b>Neutral</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★★★★★</span>
+            <span class="chip ok">Positive</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip neu">Neutral</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">Nice</h3>
+          <p class="miss-text">Nice</p>
+          <p class="miss-why"><b>Rating says Positive (★★★★★)</b>, but the model read the
+             title+text as <b>Neutral</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★★★</span>
+            <span class="chip neu">Neutral</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip bad">Negative</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">Three Stars</h3>
+          <p class="miss-text">Did not explain how to get the bonus of $10 so I lost it.</p>
+          <p class="miss-why"><b>Rating says Neutral (★★★)</b>, but the model read the
+             title+text as <b>Negative</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★★★</span>
+            <span class="chip neu">Neutral</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip bad">Negative</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">Bent</h3>
+          <p class="miss-text">The card was bent and looked terrible. I wanted a nicer presentation. Oh well.</p>
+          <p class="miss-why"><b>Rating says Neutral (★★★)</b>, but the model read the
+             title+text as <b>Negative</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★★★</span>
+            <span class="chip neu">Neutral</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip bad">Negative</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">No place to write a message</h3>
+          <p class="miss-text">The box looks pretty but there is no place to write a message on...I have to write at the back of the box which doesn&#x27;t look good.</p>
+          <p class="miss-why"><b>Rating says Neutral (★★★)</b>, but the model read the
+             title+text as <b>Negative</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★</span>
+            <span class="chip bad">Negative</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip neu">Neutral</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">It’s not what I thought it was</h3>
+          <p class="miss-text">Sorry I’m was new at this!!</p>
+          <p class="miss-why"><b>Rating says Negative (★)</b>, but the model read the
+             title+text as <b>Neutral</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★</span>
+            <span class="chip bad">Negative</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip neu">Neutral</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">One Star</h3>
+          <p class="miss-text">was a mistake, lol but i still got my money in items so ok</p>
+          <p class="miss-why"><b>Rating says Negative (★)</b>, but the model read the
+             title+text as <b>Neutral</b>.</p>
+        </div>
+      </article>
+
+      <article class="miss">
+        <div class="miss-rail"></div>
+        <div class="miss-body">
+          <div class="miss-meta">
+            <span class="stars">★</span>
+            <span class="chip bad">Negative</span><span class="vs">rating says</span>
+            <span class="arrow">&rarr;</span>
+            <span class="chip neu">Neutral</span><span class="vs">model read</span>
+          </div>
+          <h3 class="miss-title">Tin dented</h3>
+          <p class="miss-text">Came in slightly dented</p>
+          <p class="miss-why"><b>Rating says Negative (★)</b>, but the model read the
+             title+text as <b>Neutral</b>.</p>
+        </div>
+      </article></div>
+  </section>
+
+  <section id="emotion">
+    <p class="kicker">Primary emotion &middot; two independent methods</p>
+    <h2>How often the model and the word-list agree</h2>
+    <p class="sub">
+      <b>The model</b> reads the review and names one emotion. <b>The NRC word-list</b> is a plain lookup table
+      (NRC Emotion Lexicon) that counts emotion words in the review text and takes the highest category &mdash;
+      no model call. Both answer: what is this review&rsquo;s single primary emotion?
+    </p>
+    <div class="agree-band">
+      <div class="agree-num">10.0%</div>
+      <div class="agree-txt">
+        <div class="ag">The two methods chose the same primary emotion 15 of 150 times.</div>
+        <div class="an">Agreement is low because the methods differ in kind. The model reads meaning; the
+          word-list can be tipped by common words it scores as &ldquo;anticipation&rdquo; or &ldquo;joy&rdquo;. In
+          39 reviews the text held no NRC emotion words, so the word-list could not choose. Their category
+          choices are compared below.</div>
+      </div>
+    </div>
+    <div class="dist-grid">
+      <div class="dist-panel dp-model"><h4>What the model picked</h4><div class="cap">Primary emotion chosen by the LLM &mdash; one per review.</div><div id="distModel"></div></div>
+      <div class="dist-panel dp-nrc"><h4>What the NRC word-list picked</h4><div class="cap">Highest word-tally category per review &mdash; no model calls.</div><div id="distNrc"></div></div>
+    </div>
+  </section>
+
+  <section id="emodiffs">
+    <p class="kicker">Primary emotion &middot; where they disagree</p>
+    <h2><span id="diffCount"></span> reviews where the model and the word-list disagreed</h2>
+    <p class="sub">A sample of disagreements with the words the word-list counted. Use the &ldquo;Emotion match&rdquo; filter below to page through every case.</p>
+    <div class="diff-list">
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★★★</span>
+          <span class="diff-title">It’s a gift card</span>
+          <span class="diff-sent">positive</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">trust</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">anticipation</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>anticipation</b> from the words it counted there:
+           <i>gift</i>. The model instead read the review's emotion as <b>trust</b>.</p>
+      </article>
+
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★★★</span>
+          <span class="diff-title">If this is a gift, you&#x27;re going to want to buy two; one for them and one for you!</span>
+          <span class="diff-sent">positive</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">joy</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">anticipation</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>anticipation</b> from the words it counted there:
+           <i>spectacular, time, store</i>. The model instead read the review's emotion as <b>joy</b>.</p>
+      </article>
+
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★★</span>
+          <span class="diff-title">I live in P.R. and I got it withing a week.</span>
+          <span class="diff-sent">positive</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">trust</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">joy</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>joy</b> from the words it counted there:
+           <i>gift, friend</i>. The model instead read the review's emotion as <b>trust</b>.</p>
+      </article>
+
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★★★</span>
+          <span class="diff-title">Got some prepaid cards lying around that can fulfill a ...</span>
+          <span class="diff-sent">positive</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">trust</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">anger</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>anger</b> from the words it counted there:
+           <i>lying</i>. The model instead read the review's emotion as <b>trust</b>.</p>
+      </article>
+
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★★★</span>
+          <span class="diff-title">Ok</span>
+          <span class="diff-sent">positive</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">surprise</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">anticipation</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>anticipation</b> from the words it counted there:
+           <i>gift</i>. The model instead read the review's emotion as <b>surprise</b>.</p>
+      </article>
+
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★</span>
+          <span class="diff-title">Three Stars</span>
+          <span class="diff-sent">neutral</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">anger</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">anticipation</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>anticipation</b> from the words it counted there:
+           <i>bonus</i>. The model instead read the review's emotion as <b>anger</b>.</p>
+      </article>
+
+      <article class="diff">
+        <div class="diff-top">
+          <span class="stars">★★★</span>
+          <span class="diff-title">Bent</span>
+          <span class="diff-sent">neutral</span>
+        </div>
+        <div class="diff-mid">
+          <div class="emo-box"><span class="emo-lab">Model</span><span class="chip nl">sadness</span></div>
+          <span class="arrow">&harr;</span>
+          <div class="emo-box"><span class="emo-lab">NRC word-list</span><span class="chip nr">anger</span></div>
+        </div>
+        <p class="diff-why">The word-list picked <b>anger</b> from the words it counted there:
+           <i>terrible</i>. The model instead read the review's emotion as <b>sadness</b>.</p>
+      </article></div>
+  </section>
+
+  <section id="evidence">
+    <p class="kicker">Evidence</p>
+    <h2>Every review, one row</h2>
+    <p class="sub">All 150 balanced reviews with three-class sentiment and both emotion labels. Use the filters to explore; the count bar updates live.</p>
+    <div class="legend2">
+      <span><i style="background:var(--ok)"></i>positive</span>
+      <span><i style="background:var(--neu)"></i>neutral</span>
+      <span><i style="background:var(--bad)"></i>negative</span>
+    </div>
+    <div class="filters">
+      <div class="frow"><span class="flabel">Result</span>
+        <div class="controls" data-group="result">
+          <button class="seg-btn active" data-val="all">All</button>
+          <button class="seg-btn" data-val="ok">Matched</button>
+          <button class="seg-btn" data-val="miss">Mismatched</button>
+        </div></div>
+      <div class="frow"><span class="flabel">By class</span>
+        <div class="controls" data-group="cls">
+          <button class="seg-btn active" data-val="all">All</button>
+          <button class="seg-btn" data-val="positive">Positive</button>
+          <button class="seg-btn" data-val="neutral">Neutral</button>
+          <button class="seg-btn" data-val="negative">Negative</button>
+        </div></div>
+      <div class="frow"><span class="flabel">Stars</span>
+        <div class="controls" data-group="stars">
+          <button class="seg-btn active" data-val="all">All stars</button>
+          <button class="seg-btn" data-val="1">1&#9733;</button>
+          <button class="seg-btn" data-val="2">2&#9733;</button>
+          <button class="seg-btn" data-val="3">3&#9733;</button>
+          <button class="seg-btn" data-val="4">4&#9733;</button>
+          <button class="seg-btn" data-val="5">5&#9733;</button>
+        </div></div>
+      <div class="frow"><span class="flabel">Emotion match</span>
+        <div class="controls" data-group="emo">
+          <button class="seg-btn active" data-val="all">All</button>
+          <button class="seg-btn" data-val="agree">Methods agree</button>
+          <button class="seg-btn" data-val="differ">Methods differ</button>
+        </div></div>
+    </div>
+    <div class="countbar">
+      <span class="bigcount" id="bigcount"></span>
+      <span class="countsub" id="countsub"></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th><th>Stars</th><th>Rating says</th><th>Model read</th>
+          <th>Model emotion</th><th>NRC emotion</th><th>Emotion match</th><th>Title &amp; text</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span class="h">Method &amp; caveats</span>
+    <p>Sample: 150 balanced reviews (50 per rating class) drawn from the whole file with a fixed random seed 2026; the same set is produced every run.</p>
+    <p>Sentiment: title + text only, never the rating. Rubric: 4&ndash;5 = positive, 3 = neutral, 1&ndash;2 = negative. Rating used only as the correct answer for scoring.</p>
+    <p>Primary emotion (model): one LLM call per review, Qwen3.6-35B, chain-of-thought disabled. Primary emotion (NRC): NRC-EmoLex v0.92 word-level; highest word-tally per category wins; ties broken by a fixed order; no model calls.</p>
+    <p>Neutral is the hardest class: 3-star reviews are often written with complaint-heavy text, so the model frequently reads them as negative.</p>
+    <p>Offline, no server or network required &mdash; everything is embedded in this single file.</p>
+  </footer>
+
+</div>
+
+<script>
+const ROWS = [{"id": 0, "src_idx": 703, "title": "Works", "text": "Thank You", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 1, "src_idx": 3196, "title": "It’s a gift card", "text": "It’s a gift card, there is nothing else to say.", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 2, "src_idx": 6902, "title": "Five Stars", "text": "love it; thanks a million to My Amazon", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": ["love"], "sadness": [], "surprise": [], "trust": []}}, {"id": 3, "src_idx": 21428, "title": "If this is a gift, you're going to want to buy two; one for them and one for you!", "text": "Firehouse Subs is spectacular! Their tasty subs come with steamed meat, &#34;fully involved&#34; fresh ingredients, and perfectly toasted bread, making for a great meal any time of the day. In addition, they have a great selection of hot sauces in the store if you like your sandwiches to have a little &#34;kick.&#34; Try this place and you'll be hooked (and laddered)! Yum!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 2, "anticipation": 3, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": ["hot", "kick"], "anticipation": ["spectacular", "time", "store"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": ["spectacular"], "trust": ["fully"]}}, {"id": 4, "src_idx": 22666, "title": "Five Stars", "text": "Gift for brother-in-law.", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "trust", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": ["brother", "law"]}}, {"id": 5, "src_idx": 25209, "title": "Cute presentation", "text": "Sooo cute", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 6, "src_idx": 25495, "title": "Nice", "text": "Nice", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 7, "src_idx": 27574, "title": "Great, thanks", "text": "Great, thanks", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 8, "src_idx": 28862, "title": "Five Stars", "text": "Great!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 9, "src_idx": 31167, "title": "20 gift card", "text": "Its a 20 dollar gift cars", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 10, "src_idx": 32806, "title": "Trustworthy", "text": "Pretty box", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["pretty"], "disgust": [], "fear": [], "joy": ["pretty"], "sadness": [], "surprise": [], "trust": ["pretty"]}}, {"id": 11, "src_idx": 33548, "title": "Everyone loves an Amazon card", "text": "Makes for a great gift, love the package and ships perfectly", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift", "love"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 12, "src_idx": 39682, "title": "Gift", "text": "Grandson liked the card and I don't think it mattered what it came in.  I did like the design of the box though and it added a little something to just a card....", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 13, "src_idx": 59564, "title": "Five Stars", "text": "thanks", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 14, "src_idx": 63267, "title": "Xmas gift for my mom", "text": "Works like a gift card should. It's really hard to shop for my mom since she is alway's doing something different! A gift card to her favorite store should do the trick!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 3, "disgust": 0, "fear": 0, "joy": 3, "sadness": 0, "surprise": 3, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift", "store"], "disgust": [], "fear": [], "joy": ["gift", "gift", "favorite"], "sadness": [], "surprise": ["gift", "gift", "trick"], "trust": ["favorite"]}}, {"id": 15, "src_idx": 68139, "title": "Love this", "text": "Loved everything about this and it is free for the holder…that’s wonderful", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": ["wonderful"], "sadness": [], "surprise": ["wonderful"], "trust": ["wonderful"]}}, {"id": 16, "src_idx": 71406, "title": "Fun", "text": "Fun to give", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral joy", "correct": false, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["fun"], "disgust": [], "fear": [], "joy": ["fun"], "sadness": [], "surprise": [], "trust": []}}, {"id": 17, "src_idx": 73450, "title": "Five Stars", "text": "Easy", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 18, "src_idx": 81817, "title": "Cute way to send a gift card", "text": "I love that Amazon includes these super cute gift card holders, without charging separately for them. Even though I'm sending a gift card, I still want the packaging to be sort of cute. Love these cupcakes!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 4, "sadness": 0, "surprise": 2, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift"], "disgust": [], "fear": [], "joy": ["love", "gift", "gift", "love"], "sadness": [], "surprise": ["gift", "gift"], "trust": []}}, {"id": 19, "src_idx": 81916, "title": "Very cute!!", "text": "My niece will love this!!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": ["love"], "sadness": [], "surprise": [], "trust": []}}, {"id": 20, "src_idx": 83224, "title": "Five Stars", "text": "Bought this for my assistant.  She buys from Amazon often and was excited to buy more.", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["excited"], "disgust": [], "fear": [], "joy": ["excited"], "sadness": [], "surprise": ["excited"], "trust": ["excited"]}}, {"id": 21, "src_idx": 88390, "title": "I live in P.R. and I got it withing a week.", "text": "It was a gift for a friend.", "rating": 4.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift", "friend"], "sadness": [], "surprise": ["gift"], "trust": ["friend"]}}, {"id": 22, "src_idx": 89976, "title": "Five Stars", "text": "Conveniently used for PlayStore Card! ;-)", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 23, "src_idx": 91634, "title": "Easy to use", "text": "Easy to use, home goodsExcellent", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 24, "src_idx": 97920, "title": "Five Stars", "text": "Loved it.", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 25, "src_idx": 100045, "title": "Reload", "text": "This is a great way to reload your amazon account but if you have any issues there’s really no way to contact help, but that’s basically amazon in general.", "rating": 4.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "trust", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": ["account", "general"]}}, {"id": 26, "src_idx": 102696, "title": "Five Stars", "text": "It's good chances to give presents for friends and family.", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["good"], "disgust": [], "fear": [], "joy": ["good"], "sadness": [], "surprise": ["good"], "trust": ["good"]}}, {"id": 27, "src_idx": 104778, "title": "Easier!", "text": "Quick and no need to go out to the store to buy a gift card!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["store", "gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 28, "src_idx": 106331, "title": "Speedy!", "text": "It processed in 10 minutes. It was very useful and it was VERY quick!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 29, "src_idx": 108582, "title": "Easy to send", "text": "Sent as a gift", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 30, "src_idx": 115270, "title": "Got some prepaid cards lying around that can fulfill a ...", "text": "Got some prepaid cards lying around that can fulfill a full purchase? Put them in your amazon account! Every dollar counts!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 0, "disgust": 1, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": ["lying"], "anticipation": [], "disgust": ["lying"], "fear": [], "joy": ["fulfill"], "sadness": [], "surprise": [], "trust": ["account"]}}, {"id": 31, "src_idx": 115556, "title": "Five Stars", "text": "Just as described.", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 32, "src_idx": 115744, "title": "Ok", "text": "Why would I rate a gift card that I put on here-makes no sense", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 33, "src_idx": 122071, "title": "It’s a nicely e-shopping experience on Amazon and also their providing customer service to me.", "text": "Like to buy hiking shoe which the size may not find in Taiwan and also good to be Thanksgiving gifts", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["good"], "disgust": [], "fear": [], "joy": ["good", "thanksgiving"], "sadness": [], "surprise": ["good"], "trust": ["good"]}}, {"id": 34, "src_idx": 122275, "title": "Easy", "text": "Easy", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 35, "src_idx": 122792, "title": "Excellent feature", "text": "I used it a lot in the year i've been buying on amazon and it helped me a lot", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 36, "src_idx": 123837, "title": "The gift box was beautiful and well decorated.", "text": "I would buy this again, but ask for a different box!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 37, "src_idx": 128658, "title": "Five Stars", "text": "great gift", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 38, "src_idx": 131223, "title": "Five Stars", "text": "Easy and fast", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 39, "src_idx": 133695, "title": "Ten Tin", "text": "The recipient thoroughly enjoyed the tin.", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["recipient"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 40, "src_idx": 134854, "title": "OMG the most amazing, incredible thing ever", "text": "OMG the most amazing, incredible thing ever... Oh wait they are just plastic ordinary gift cards; but I did receive an Amazon promo credit.  5 stars it is.", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["wait", "gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": ["credit"]}}, {"id": 41, "src_idx": 140634, "title": "Five Stars", "text": "whats not to love about amazon gift cards?", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["love", "gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 42, "src_idx": 144272, "title": "They loved it!", "text": "This was a gift for my son and daughter-in-law. They loved it !", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift", "daughter"], "sadness": [], "surprise": ["gift"], "trust": ["law"]}}, {"id": 43, "src_idx": 144470, "title": "Five Stars", "text": "Great service and product!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 44, "src_idx": 144505, "title": "Five Stars", "text": "Cute packaging", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 45, "src_idx": 146895, "title": "Its great having extra for the purchase", "text": "So glad it was available!!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["glad"], "disgust": [], "fear": [], "joy": ["glad"], "sadness": [], "surprise": [], "trust": []}}, {"id": 46, "src_idx": 148342, "title": "Game Stop", "text": "I was satisfied with the promptness of receiving the gift card. It's great not to have to run around and it saves on gas.", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 3, "sadness": 0, "surprise": 2, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["receiving", "gift"], "disgust": [], "fear": [], "joy": ["satisfied", "receiving", "gift"], "sadness": [], "surprise": ["receiving", "gift"], "trust": []}}, {"id": 47, "src_idx": 149584, "title": "Five Stars", "text": "It was so easy", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 48, "src_idx": 151432, "title": "Always a great gift!", "text": "Having trouble deciding on a gift?  Gift cards are perfect for that!!!", "rating": 5.0, "cls": "positive", "sentiment": "positive", "raw": "positive joy", "correct": true, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 3, "disgust": 0, "fear": 0, "joy": 3, "sadness": 0, "surprise": 2, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift", "perfect"], "disgust": [], "fear": [], "joy": ["gift", "gift", "perfect"], "sadness": [], "surprise": ["gift", "gift"], "trust": ["perfect"]}}, {"id": 49, "src_idx": 152010, "title": "Cute, not functional", "text": "Bought this gift card for a teacher. I loved how adorable this gift card holder looked. The only downside to the ornament is the hook wasn’t very big so I don’t think it would actually hang on a tree. Overall, I thought this was a good purchase.", "rating": 5.0, "cls": "positive", "sentiment": "neutral", "raw": "neutral joy", "correct": false, "model_emotion": "joy", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 5, "disgust": 1, "fear": 0, "joy": 5, "sadness": 0, "surprise": 4, "trust": 4}, "nrc_matched": {"anger": ["tree"], "anticipation": ["gift", "gift", "tree", "thought", "good"], "disgust": ["tree"], "fear": [], "joy": ["gift", "adorable", "gift", "tree", "good"], "sadness": [], "surprise": ["gift", "gift", "tree", "good"], "trust": ["teacher", "don", "tree", "good"]}}, {"id": 50, "src_idx": 1506, "title": "Gift", "text": "Hope it is easy to get use.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["hope"], "disgust": [], "fear": [], "joy": ["hope"], "sadness": [], "surprise": ["hope"], "trust": ["hope"]}}, {"id": 51, "src_idx": 4919, "title": "Should say who it is from", "text": "Should say who it is from, nice packaging but nowhere on it does it say who sent it.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 52, "src_idx": 7114, "title": "Three Stars", "text": "Did not explain how to get the bonus of $10 so I lost it.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 1, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["bonus"], "disgust": [], "fear": [], "joy": ["bonus"], "sadness": ["lost"], "surprise": ["bonus"], "trust": ["explain"]}}, {"id": 53, "src_idx": 10507, "title": "Great last min gift.", "text": "Hate that Visa does processing fee but what are gonna do!", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anger", "nrc_tallies": {"anger": 2, "anticipation": 0, "disgust": 1, "fear": 1, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": ["hate", "fee"], "anticipation": [], "disgust": ["hate"], "fear": ["hate"], "joy": [], "sadness": ["hate"], "surprise": [], "trust": []}}, {"id": 54, "src_idx": 22180, "title": "Bent", "text": "The card was bent and looked terrible. I wanted a nicer presentation. Oh well.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 0, "disgust": 1, "fear": 1, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": ["terrible"], "anticipation": [], "disgust": ["terrible"], "fear": ["terrible"], "joy": [], "sadness": ["terrible"], "surprise": [], "trust": []}}, {"id": 55, "src_idx": 25910, "title": "No place to write a message", "text": "The box looks pretty but there is no place to write a message on...I have to write at the back of the box which doesn't look good.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": ["pretty", "good"], "disgust": [], "fear": [], "joy": ["pretty", "good"], "sadness": [], "surprise": ["good"], "trust": ["pretty", "good"]}}, {"id": 56, "src_idx": 27366, "title": "Tin is 3 dollars", "text": "I didn't realize that I was paying for the tin which was 3 dollars.  Either I missed that or they need to make that more clear!  It was a nice tin though", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 57, "src_idx": 30100, "title": "Order something other than the flowers", "text": "This was not giftable, as the back was torn and you couldn’t pull the flowers up and down.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative disgust", "correct": false, "model_emotion": "disgust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 58, "src_idx": 31890, "title": "Three Stars", "text": "Gift.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 59, "src_idx": 44568, "title": "Don't ever put a lot of money on it and buy something", "text": "It was a huge pain in the butt trying to load and then when I tried to pay for something you wouldn't take it from the gift card you kept trying to charge my credit and debit cards and it ended up charging me fees up the wazoo and locking my account. So then I had to get my account unlocked all so I could go through it again so then I tried logging in from somewhere else and miraculously it worked fine. So all of that nonsense to buy my sons Christmas gift and now I'm out an extra $45. Otherwise it's usually great.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "trust", "nrc_tallies": {"anger": 0, "anticipation": 3, "disgust": 0, "fear": 1, "joy": 3, "sadness": 1, "surprise": 2, "trust": 4}, "nrc_matched": {"anger": [], "anticipation": ["pay", "gift", "gift"], "disgust": [], "fear": ["pain"], "joy": ["pay", "gift", "gift"], "sadness": ["pain"], "surprise": ["gift", "gift"], "trust": ["pay", "credit", "account", "account"]}}, {"id": 60, "src_idx": 49406, "title": "Unable to credit my account.  Lost $25. 00", "text": "I was Not able to load it onto my account!  I called customer service,  who screwed around for the better part of an hour,  with me giving them All the information. Both on the card and activation slip I got from the cashier but ended by saying they would \"investigate  and would credit me in a few days.  Its been 2 weeks and... Nothing!", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "trust", "nrc_tallies": {"anger": 1, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 1, "trust": 3}, "nrc_matched": {"anger": ["screwed"], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": ["slip"], "trust": ["account", "cashier", "credit"]}}, {"id": 61, "src_idx": 50504, "title": "I thought the $6.95 charge was excesive", "text": "The loading charge I thought was excessive", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["thought"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 62, "src_idx": 54049, "title": "Not satisfied with this dryer.", "text": "The hood is not adjustable only one height. I had a Conair Dryer years ago that had adjustable hood. Quite frustrating and difficult to use without having to prop up pillows in a high chair to dry my hair on a lower counter. Not a good purchase for me.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "fear", "nrc_tallies": {"anger": 2, "anticipation": 1, "disgust": 2, "fear": 3, "joy": 1, "sadness": 1, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": ["hood", "hood"], "anticipation": ["good"], "disgust": ["hood", "hood"], "fear": ["hood", "hood", "difficult"], "joy": ["good"], "sadness": ["lower"], "surprise": ["good"], "trust": ["good"]}}, {"id": 63, "src_idx": 58347, "title": "To use everywhere", "text": "Came fast but only could use it on certain stuff", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 64, "src_idx": 63610, "title": "Cute", "text": "Super cute design… but I’m not sure what happened when it was packaged, as the wrapping is torn and so is the card.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral surprise", "correct": true, "model_emotion": "surprise", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 65, "src_idx": 66263, "title": "Missing Bottom Lid", "text": "Super cute gift holder ornament tin. However, it was missing the bottom part.  I was not able to return or request another one due to time constraints.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 1, "joy": 1, "sadness": 2, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "time"], "disgust": [], "fear": ["missing"], "joy": ["gift"], "sadness": ["missing", "bottom"], "surprise": ["gift"], "trust": []}}, {"id": 66, "src_idx": 77166, "title": "Good way to send gifts", "text": "Gift card is great and was delivered on time.  The card telling who it was from didn't make it into the package and it was an accident I found out.  They made the statement someone sent us $50 and we have no idea who.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 1, "joy": 2, "sadness": 1, "surprise": 2, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": ["gift", "time"], "disgust": [], "fear": ["accident"], "joy": ["gift", "found"], "sadness": ["accident"], "surprise": ["gift", "accident"], "trust": ["found", "statement"]}}, {"id": 67, "src_idx": 85228, "title": "Be careful, they keep asking for more!", "text": "It was easy to do. But it made me a little uneasy when it showed up in email asking if I wanted to add more money to my gift card. It made it look like they were just going to automatically add money that I didn't okay. You have to be  careful what you click on with Amazon. When I want to add more money, I will do the initializing. It might just be a polite reminder, but I don't like it when places keep asking for money or for you to buy things. Amazon is good at this practice...", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative fear", "correct": false, "model_emotion": "fear", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 4, "anticipation": 6, "disgust": 1, "fear": 1, "joy": 6, "sadness": 0, "surprise": 6, "trust": 5}, "nrc_matched": {"anger": ["money", "money", "money", "money"], "anticipation": ["money", "gift", "money", "money", "money", "good"], "disgust": ["uneasy"], "fear": ["uneasy"], "joy": ["money", "gift", "money", "money", "money", "good"], "sadness": [], "surprise": ["money", "gift", "money", "money", "money", "good"], "trust": ["money", "money", "money", "money", "good"]}}, {"id": 68, "src_idx": 89868, "title": "Box was slightly dented and cheap card quality.", "text": "I received a slightly dented box. It wasn't very visible, but because it was so hollow, I would prefer something of a slightly more solid build quality. Also, the gift card quality felt very cheap.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative disgust", "correct": false, "model_emotion": "disgust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 1, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": ["hollow"], "surprise": ["gift"], "trust": ["prefer"]}}, {"id": 69, "src_idx": 90407, "title": "The bow is not gold it's pink", "text": "I am giving it to my son and the bow is pink. Not happy.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["happy"], "disgust": [], "fear": [], "joy": ["happy"], "sadness": [], "surprise": [], "trust": ["happy"]}}, {"id": 70, "src_idx": 95843, "title": "Wrong", "text": "Wrong card", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 71, "src_idx": 96034, "title": "Three Stars", "text": "gfh", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral fear", "correct": true, "model_emotion": "fear", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 72, "src_idx": 97949, "title": "Okay", "text": "These are okay, you get $45 for Fandango, which I bought as a Deal of the Day so it was a little less expensive, but as far as ease of use they are not good.<br /><br />There's no way to pre-load these gift cards to your account, so we had to make sure the gift cards were always with us. We usually buy our tickets on Fandango through our phone while sitting at dinner, or on the way to the theater, but if we had left the cards at home...too bad.<br /><br />There's no way to scan the cards with your phone either. That means having to type in each card number (19 digits) then scratching to reveal the pin number to type in another 4. It's a pain when purchasing multiple tickets that cost more than a single $15 dollar card so you're there typing, scratching, typing, typing, scratching, typing from several cards like a weirdo.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative frustration", "correct": false, "model_emotion": "other:frustration", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 4, "disgust": 1, "fear": 3, "joy": 4, "sadness": 2, "surprise": 4, "trust": 3}, "nrc_matched": {"anger": ["bad"], "anticipation": ["deal", "good", "gift", "gift"], "disgust": ["bad"], "fear": ["bad", "pain", "weirdo"], "joy": ["deal", "good", "gift", "gift"], "sadness": ["bad", "pain"], "surprise": ["deal", "good", "gift", "gift"], "trust": ["deal", "good", "account"]}}, {"id": 73, "src_idx": 98184, "title": "not unusually", "text": "unlike nothing, it was not special , I brought these for my spouse, he said the food was better in NJ", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral surprise", "correct": true, "model_emotion": "surprise", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 3, "sadness": 0, "surprise": 0, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": ["special", "spouse", "food"], "sadness": [], "surprise": [], "trust": ["spouse", "food"]}}, {"id": 74, "src_idx": 100146, "title": "Amazon.com Gift Card Balance Reload", "text": "I received you payment method from Marriott Rewards.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 75, "src_idx": 100628, "title": "They said it usually takes 5 minutes to process. ...", "text": "They said it usually takes 5 minutes to process. 4 hours later I received my credits... I did get the $5 bonus, which was satisfying.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["bonus"], "disgust": [], "fear": [], "joy": ["bonus"], "sadness": [], "surprise": ["bonus"], "trust": []}}, {"id": 76, "src_idx": 101989, "title": "Good", "text": "How can I return  my money to my bank.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "trust", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 2}, "nrc_matched": {"anger": ["money"], "anticipation": ["money"], "disgust": [], "fear": [], "joy": ["money"], "sadness": [], "surprise": ["money"], "trust": ["money", "bank"]}}, {"id": 77, "src_idx": 103898, "title": "No credit given as it said.", "text": "I was under the impression that you were going to get $10 off a large order, but not the case. Perhaps I just read it wrong??", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "fear", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 1, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": ["case"], "joy": [], "sadness": ["case"], "surprise": [], "trust": []}}, {"id": 78, "src_idx": 106022, "title": "As expected", "text": "As expected", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["expected"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 79, "src_idx": 106729, "title": "Good and confounding", "text": "I received this as a gift. It is a ver cute and adorable gift card presentation; however, there is no where it states the value even when i scan the qr code", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 3, "sadness": 0, "surprise": 2, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift"], "disgust": [], "fear": [], "joy": ["gift", "adorable", "gift"], "sadness": [], "surprise": ["gift", "gift"], "trust": []}}, {"id": 80, "src_idx": 107382, "title": "Three Stars", "text": "you can never go wrong for a gift card", "rating": 3.0, "cls": "neutral", "sentiment": "positive", "raw": "positive trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 81, "src_idx": 107484, "title": "One didn’t work", "text": "Bought 2 card a for family members.  One didn’t work. But it was easy to get a refund and when I ordered a replacement, it worked fine.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 82, "src_idx": 111827, "title": "The card and the outbox look so cheap. I ...", "text": "The card and the outbox look so cheap. I would be embarrassed to give to someone else as a gift.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative disgust", "correct": false, "model_emotion": "disgust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 83, "src_idx": 112453, "title": "Mangled tin!", "text": "The tin was so mangled I could not bend it back into shape to completely close.  I had to apologize to the recipient that it looked used!", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 1, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["recipient"], "disgust": [], "fear": [], "joy": [], "sadness": ["apologize"], "surprise": [], "trust": ["apologize"]}}, {"id": 84, "src_idx": 114495, "title": "Its cool", "text": "Reload is cool but I couldnt figure out how to cancel one that didnt go through the first time.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["time"], "disgust": [], "fear": [], "joy": [], "sadness": ["cancel"], "surprise": [], "trust": []}}, {"id": 85, "src_idx": 117088, "title": "Cool....but", "text": "Pretty simple. Works @ any WFM. Big criticism: card needs a digital component . For example Target reload GiftCards may be registered & used on mobile devices. Better integration of analog & cloud would really bring me back in the future.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 1, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": ["criticism"], "anticipation": ["pretty", "mobile"], "disgust": [], "fear": [], "joy": ["pretty"], "sadness": ["criticism"], "surprise": [], "trust": ["pretty"]}}, {"id": 86, "src_idx": 120453, "title": "I like and admire Whole Foods, however", "text": "most people I know think they are too expensive.  We use them for certain things.  I won't give these again as a gift because you don't get that much for $50.00 and I gave them to college students.", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 87, "src_idx": 124984, "title": "Just for gift!", "text": "For gift", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 88, "src_idx": 125553, "title": "Three Stars", "text": "The gift card came by itself not in or with the gift box looking holder.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral sadness", "correct": true, "model_emotion": "sadness", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 2, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift"], "disgust": [], "fear": [], "joy": ["gift", "gift"], "sadness": [], "surprise": ["gift", "gift"], "trust": []}}, {"id": 89, "src_idx": 129171, "title": "How can you review a gift card?", "text": "Wait, what? You want me to review a gift card? Why? That makes no sense.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral surprise", "correct": true, "model_emotion": "surprise", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["wait", "gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 90, "src_idx": 130406, "title": "It worked. No problems.", "text": "It worked a solid expected. Nothing about it to make me think that it exceeded my expectations so three stars it is. Maybe offer more increments?", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["expected"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 91, "src_idx": 133319, "title": "$3.50 charge", "text": "Why did I get charged $3.50 per gift card pk?", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 92, "src_idx": 133422, "title": "Very good type of gift.", "text": "The recipient didn’t get the enclosed message I wrote,and didn’t know who sent it!", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["recipient"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 93, "src_idx": 133676, "title": "Card was buried in the box. Had to go looking for it.", "text": "Nice box, but when opened, the card inside was hidden. Had to go looking for it.", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 94, "src_idx": 137730, "title": "Three Stars", "text": "Just needed a gift card", "rating": 3.0, "cls": "neutral", "sentiment": "neutral", "raw": "neutral trust", "correct": true, "model_emotion": "trust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 95, "src_idx": 138013, "title": "$25 gift card", "text": "DID NOT GET TO USE GIFT CARD - IT WAS THROWN AWAY BY MISTAKE AT XMAS TIME WITH THE WRAPPINGS", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 1, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "time"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": ["mistake"], "surprise": ["gift"], "trust": []}}, {"id": 96, "src_idx": 138447, "title": "Shouldn't Make Promises If You Can't Keep Them", "text": "I realize the weather is horrible, but why in the world is my gift card, that was supposed to be here yesterday, about 4 hours north (closer to Chicago) of where I live (close to St. Louis, MO) when it was shipped from Kentucky? This makes absolutely no sense to me...", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 1, "fear": 1, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": ["horrible"], "anticipation": ["gift"], "disgust": ["horrible"], "fear": ["horrible"], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 97, "src_idx": 139983, "title": "Don’t worded different amounts!", "text": "Cute box but watch out if you are ordering more than one and in different amounts. I got 8 in the mail that all looked exactly the same and nowhere does it say how much each of them are worth! They tell you to use the app to scan to find out the amount but you have to peel off the claim code to do that. Eventually I found the serial numbers under my orders. Crazy though, the receipt in the package lists only 2 serial numbers (out of 8) and they don’t show those gift cards under the same amount! So I am having to cross fingers and hope I am sending the right amount to the right person! Never again!", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 2, "anticipation": 6, "disgust": 0, "fear": 3, "joy": 3, "sadness": 2, "surprise": 2, "trust": 4}, "nrc_matched": {"anger": ["crazy", "cross"], "anticipation": ["watch", "mail", "serial", "serial", "gift", "hope"], "disgust": [], "fear": ["watch", "crazy", "cross"], "joy": ["found", "gift", "hope"], "sadness": ["crazy", "cross"], "surprise": ["gift", "hope"], "trust": ["found", "don", "show", "hope"]}}, {"id": 98, "src_idx": 140371, "title": "Not so happy", "text": "I wanted to use the card at a restaurant, it automatically added 20% for a tip, then the card was declined because there wasn't enough to cover the meal and tip. I prefer to give cash for a tip", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative anger", "correct": false, "model_emotion": "anger", "nrc_emotion": "trust", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 0, "fear": 1, "joy": 1, "sadness": 0, "surprise": 0, "trust": 3}, "nrc_matched": {"anger": ["cash"], "anticipation": ["cash"], "disgust": [], "fear": ["cash"], "joy": ["cash"], "sadness": [], "surprise": [], "trust": ["cover", "prefer", "cash"]}}, {"id": 99, "src_idx": 147617, "title": "Can I purchase coins this way", "text": "If by chance you're a coin collector do not load money onto your Amazon account because you cannot purchase coins with gift cards!", "rating": 3.0, "cls": "neutral", "sentiment": "negative", "raw": "negative disgust", "correct": false, "model_emotion": "disgust", "nrc_emotion": "surprise", "nrc_tallies": {"anger": 1, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 3, "trust": 2}, "nrc_matched": {"anger": ["money"], "anticipation": ["money", "gift"], "disgust": [], "fear": [], "joy": ["money", "gift"], "sadness": [], "surprise": ["chance", "money", "gift"], "trust": ["money", "account"]}}, {"id": 100, "src_idx": 51, "title": "The added value was great, but no more", "text": "Purchasing an Amazon gift card came with an added monetary value but no more.<br /><br />A Bronx cheer for you!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 3, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 2, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift", "monetary", "cheer"], "disgust": [], "fear": [], "joy": ["gift", "cheer"], "sadness": [], "surprise": ["gift", "cheer"], "trust": ["cheer"]}}, {"id": 101, "src_idx": 5938, "title": "It’s not what I thought it was", "text": "Sorry I’m was new at this!!", "rating": 1.0, "cls": "negative", "sentiment": "neutral", "raw": "neutral sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 102, "src_idx": 12411, "title": "Showed up and packaging was fine but card was all scratch up and back had ...", "text": "Showed up and packaging was fine but card was all scratch up and back had black marks like it was stuck in a machine.<br />Not worth shipping it back.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative disgust", "correct": true, "model_emotion": "disgust", "nrc_emotion": "trust", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": ["machine"]}}, {"id": 103, "src_idx": 22240, "title": "Bad Condition", "text": "The card was folded and in bad condition.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative disgust", "correct": true, "model_emotion": "disgust", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 0, "disgust": 1, "fear": 1, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": ["bad"], "anticipation": [], "disgust": ["bad"], "fear": ["bad"], "joy": [], "sadness": ["bad"], "surprise": [], "trust": []}}, {"id": 104, "src_idx": 30679, "title": "Asked for message to be included and it was not", "text": "Recipient did not even know who this was from even though I specified the message to be included.", "rating": 2.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["recipient"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 105, "src_idx": 31925, "title": "A fraud!", "text": "For 48 hrs I have tried to check the balance or register this card - won’t work online, says to call customer service, call that and most of the time it says the system is down, finally get thru and only automated system which says it can’t find the card number.  No human to talk to.  Now trying to see if I can get my $200 back from Amazon!!!!  Even worse I gave a bunch of these cards in smaller denominations as gifts and I’m so embarrassed that I may have given fraudulent gifts.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "trust", "nrc_tallies": {"anger": 1, "anticipation": 2, "disgust": 2, "fear": 1, "joy": 1, "sadness": 1, "surprise": 1, "trust": 3}, "nrc_matched": {"anger": ["fraudulent"], "anticipation": ["time", "finally"], "disgust": ["finally", "fraudulent"], "fear": ["worse"], "joy": ["finally"], "sadness": ["worse"], "surprise": ["finally"], "trust": ["system", "finally", "system"]}}, {"id": 106, "src_idx": 32472, "title": "gross USED gift card", "text": "The carboard the card was attached to was ripped and the card definitely has swipe marks.  Not exactly what you want in something you are planning on giving as a gift.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative disgust", "correct": true, "model_emotion": "disgust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["planning", "gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": ["planning"]}}, {"id": 107, "src_idx": 46704, "title": "Beware USPS in tanks", "text": "This was supposed to be a Christmas present. When it finally arrived after New Year's the post office appeared to have driven over the snowflake in a tank.  Amazon were quick to refund the purchase price but having emailed us that we could use the card in anyway we wished, the code was dysfunctional.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 1, "fear": 0, "joy": 2, "sadness": 0, "surprise": 2, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": ["present", "finally"], "disgust": ["finally"], "fear": [], "joy": ["present", "finally"], "sadness": [], "surprise": ["present", "finally"], "trust": ["present", "finally"]}}, {"id": 108, "src_idx": 54487, "title": "It's a scam", "text": "I was supposed to get some kind of a deal or discount for purchasing the reload. I did not", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "joy", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 2}, "nrc_matched": {"anger": [], "anticipation": ["deal"], "disgust": [], "fear": [], "joy": ["kind", "deal"], "sadness": [], "surprise": ["deal"], "trust": ["kind", "deal"]}}, {"id": 109, "src_idx": 57148, "title": "Good Only for Use in the USA and not for Internet/telephone/mail orders outside", "text": "I think there should be a clear description in the Amazon webpage product information, that is lacking, and unfortunately  found out after 3 separate purchases of the card and thought a merchant was at fault.  The 3rd time, I read the microprint sheet that accompanied the mastercard and read the following:<br /><br /> \"Your card is valid in the U.S. only...it cannot be used at merchants  outside the United States, including internet and mail/telephone order merchants outside the United States...\"<br /><br />So the purchase of all 3 cards was worthless and the extra money that you pay to get this card was for naught.  Extremely disappointing  I lost $5.95 on this card, $4.95 on another, and $4.95 on another - charges to buy the card on top of its value.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "trust", "nrc_tallies": {"anger": 2, "anticipation": 6, "disgust": 1, "fear": 0, "joy": 3, "sadness": 4, "surprise": 1, "trust": 7}, "nrc_matched": {"anger": ["worthless", "money"], "anticipation": ["thought", "time", "mail", "money", "pay", "top"], "disgust": ["worthless"], "fear": [], "joy": ["found", "money", "pay"], "sadness": ["fault", "worthless", "disappointing", "lost"], "surprise": ["money"], "trust": ["found", "merchant", "united", "united", "money", "pay", "top"]}}, {"id": 110, "src_idx": 58381, "title": "No denomination?", "text": "Where's the denomination amount? Won't purchase again. Ordered 10 gift cards. In the past there was an amount. Know I have to do the extra work to read the tiny serial numbers.  Very disappointing.  Will purchase from stores in the future.  Bad move Amazon.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 2, "disgust": 1, "fear": 1, "joy": 1, "sadness": 2, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": ["bad"], "anticipation": ["gift", "serial"], "disgust": ["bad"], "fear": ["bad"], "joy": ["gift"], "sadness": ["disappointing", "bad"], "surprise": ["gift"], "trust": []}}, {"id": 111, "src_idx": 73424, "title": "One Star", "text": "was a mistake, lol but i still got my money in items so ok", "rating": 1.0, "cls": "negative", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 1, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": ["money"], "anticipation": ["money"], "disgust": [], "fear": [], "joy": ["money"], "sadness": ["mistake"], "surprise": ["money"], "trust": ["money"]}}, {"id": 112, "src_idx": 73652, "title": "not good.", "text": "This card has to be set up to view a specific movie at a specific theater and can not be redeemed at the theater,  only before hand... not good.", "rating": 2.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["good"], "disgust": [], "fear": [], "joy": ["good"], "sadness": [], "surprise": ["good"], "trust": ["good"]}}, {"id": 113, "src_idx": 74969, "title": "One Star", "text": "cannot use for telephone order", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 114, "src_idx": 79228, "title": "You can’t use it in many stores. Read before buying", "text": "I had difficulties with setting up the pin, purchases and where to use it. I didn’t really realized it was MasterCard bc I usually by VISA. It was just a lot of hassle", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative sadness", "correct": true, "model_emotion": "sadness", "nrc_emotion": "sadness", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": ["difficulties"], "surprise": [], "trust": []}}, {"id": 115, "src_idx": 84881, "title": "Does not fulfill promises", "text": "Amazon applied a $100 gift card to my account.  They will not apply the $8 to my account,  as promised.  I am disabled, every penny helps. Don't rip off customers!  EDITED:  after spending  LITERALLY an HOUR on the phone I was credited the $8.  I had to talk to a supervisor,  and they made it sound like they were only giving it to me to shut me up, though.  The rating stands!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "fear", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 0, "fear": 2, "joy": 1, "sadness": 2, "surprise": 1, "trust": 2}, "nrc_matched": {"anger": ["rating"], "anticipation": ["gift"], "disgust": [], "fear": ["disabled", "rating"], "joy": ["gift"], "sadness": ["disabled", "rating"], "surprise": ["gift"], "trust": ["account", "account"]}}, {"id": 116, "src_idx": 91482, "title": "Unremovable sticker over claim code", "text": "I did finally manage to scrape the sticker that was hiding the claim code off with a very sharp knife and piece together the claim code. I really shouldn't have to go through this to redeem my gift card.<br /><br />Amazon seems to have fallen in love with putting these nonremovable stickers on everything. Every book I've bought from them lately has had at least 2 of the damn things on it. A new book should be a thing of beauty. Not when Amazon gets ahold of it first.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "joy", "nrc_tallies": {"anger": 1, "anticipation": 2, "disgust": 2, "fear": 1, "joy": 4, "sadness": 0, "surprise": 2, "trust": 2}, "nrc_matched": {"anger": ["damn"], "anticipation": ["finally", "gift"], "disgust": ["finally", "damn"], "fear": ["hiding"], "joy": ["finally", "gift", "love", "beauty"], "sadness": [], "surprise": ["finally", "gift"], "trust": ["finally", "manage"]}}, {"id": 117, "src_idx": 97650, "title": "Not worth it EXP date too far in future!", "text": "Dislike! Can’t use it with online purchases because the exp date on the gift card is 2027! What a crock! So now an easy gift for my daughter is a burden. Between work and toddler she now has to go to the store to order everything she was going to buy online and won’t get done of the online deals as a result! Yup - not worth it!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 4, "disgust": 1, "fear": 0, "joy": 3, "sadness": 0, "surprise": 2, "trust": 0}, "nrc_matched": {"anger": ["dislike"], "anticipation": ["gift", "gift", "store", "result"], "disgust": ["dislike"], "fear": [], "joy": ["gift", "gift", "daughter"], "sadness": [], "surprise": ["gift", "gift"], "trust": []}}, {"id": 118, "src_idx": 100307, "title": "Thief", "text": "My card came in with money than the next day it's gone to Google play store I don't understand I want my money back", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 2, "anticipation": 3, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 2, "trust": 2}, "nrc_matched": {"anger": ["money", "money"], "anticipation": ["money", "store", "money"], "disgust": [], "fear": [], "joy": ["money", "money"], "sadness": [], "surprise": ["money", "money"], "trust": ["money", "money"]}}, {"id": 119, "src_idx": 101805, "title": "misleading", "text": "very disappointing", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative sadness", "correct": true, "model_emotion": "sadness", "nrc_emotion": "sadness", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": ["disappointing"], "surprise": [], "trust": []}}, {"id": 120, "src_idx": 102625, "title": "Gift Card With Exposed Claim Code", "text": "Who gets an Amazon gift card with an exposed claim code?  I've always either had to pull a thin covering off or scrape a covering off to reveal the code.  This gift card that I ordered directly from Amazon came with NO covering at all on it.  A call to customer service got me NO satisfaction.  This $100 gift card was purchased to be a Christmas gift.  The box by the way is great - very pretty.  Since it is 7 weeks until Christmas (and plenty of time for a potential Amazon employee thief to use the code they exposed) all I could figure out to do was put the card on MY own Amazon account and find something else to give that person for Christmas since I'm not sure it's safe to order gift cards directly from Amazon anymore!!  Last year around Christmas the Amazon deliveries were being slit open from the bottom so they could steal items they wanted, looks like this year Amazon employees want gift cards so they can choose their own merchandise!!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 2, "anticipation": 8, "disgust": 1, "fear": 2, "joy": 8, "sadness": 3, "surprise": 7, "trust": 3}, "nrc_matched": {"anger": ["thief", "steal"], "anticipation": ["gift", "gift", "gift", "gift", "pretty", "time", "gift", "gift"], "disgust": ["thief"], "fear": ["thief", "steal"], "joy": ["gift", "gift", "gift", "gift", "pretty", "safe", "gift", "gift"], "sadness": ["thief", "bottom", "steal"], "surprise": ["gift", "gift", "gift", "gift", "thief", "gift", "gift"], "trust": ["pretty", "account", "safe"]}}, {"id": 121, "src_idx": 104364, "title": "Do not buy gift cards on Amazon", "text": "Cards did not come activated and now neither Amazon or Best Buy is helping.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 122, "src_idx": 104667, "title": "Finish Line's gift card business is likely compromised. Buyer beware.", "text": "PIN was intact but gift card was drained by a fraudster. Other Finish Line gift card in my order was ok. Amazon and Finish Line would not help me. Finish Line's gift card business is likely compromised. Buyer beware.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 4, "disgust": 0, "fear": 1, "joy": 3, "sadness": 0, "surprise": 3, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift", "gift", "beware"], "disgust": [], "fear": ["beware"], "joy": ["gift", "gift", "gift"], "sadness": [], "surprise": ["gift", "gift", "gift"], "trust": ["intact"]}}, {"id": 123, "src_idx": 105025, "title": "What a deal.", "text": "Was going to order a gift card but I'm glad I read these reviews first.  Will not order!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative fear", "correct": true, "model_emotion": "fear", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 2, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "glad"], "disgust": [], "fear": [], "joy": ["gift", "glad"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 124, "src_idx": 106031, "title": "Item was not redeemable", "text": "The item was not redeemable.  I spent 200 for the gift card but it could not be used and Amazon refuses to issue a refund.  The worst service I have ever seen.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 125, "src_idx": 107374, "title": "Highly Disappointed!", "text": "I was very unhappy with this purchase!! I bought this as a Christmas gift and when the recipient tried to use it...no money was on the card!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 2, "anticipation": 3, "disgust": 1, "fear": 0, "joy": 2, "sadness": 1, "surprise": 2, "trust": 1}, "nrc_matched": {"anger": ["unhappy", "money"], "anticipation": ["gift", "recipient", "money"], "disgust": ["unhappy"], "fear": [], "joy": ["gift", "money"], "sadness": ["unhappy"], "surprise": ["gift", "money"], "trust": ["money"]}}, {"id": 126, "src_idx": 109306, "title": "Torn", "text": "The sleeve was torn upon arrival so that sucked.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["arrival"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 127, "src_idx": 110235, "title": "Do not order gift cards. They don’t arrive!!", "text": "Do not order gift cards. They don’t arrive!!", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 2, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["gift", "arrive"], "disgust": [], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": ["don"]}}, {"id": 128, "src_idx": 110731, "title": "Gifted for Christmas, guest tried to use it, shows ZERO on card.", "text": "Purchased a batch, guest tried to use it the other day and his balance shows ZERO.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 129, "src_idx": 110814, "title": "Will not buy this card again", "text": "I tried buying things off facebook but was unable", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "sadness", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": ["unable"], "surprise": [], "trust": []}}, {"id": 130, "src_idx": 111434, "title": "CARDS DON'T WORK", "text": "BOUGHT 4 OF THESE CARDS as Christmas gifts.  Recieved an email stating the CARDS weren't activated.  I received 4 more cards. Went on vacation in Disney tried to use the cards.  Still don't work . I bought along all of the cards the ones they told me weren't activated and the new ones they send. Called visa cards weren't activated. DO NOT BUY FROM THIS SITE", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["vacation"], "disgust": [], "fear": [], "joy": ["vacation"], "sadness": [], "surprise": [], "trust": []}}, {"id": 131, "src_idx": 111609, "title": "Not worth it", "text": "it does not work in stores. Every store it would say error or can’t be used at this store. There was money on it. However, it only worked online which was very inconvenient. Would not buy again. The point of this card was to be able to use it in stores or while traveling. Embarrassing.", "rating": 2.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 2, "anticipation": 3, "disgust": 1, "fear": 0, "joy": 1, "sadness": 2, "surprise": 1, "trust": 1}, "nrc_matched": {"anger": ["money", "inconvenient"], "anticipation": ["store", "store", "money"], "disgust": ["inconvenient"], "fear": [], "joy": ["money"], "sadness": ["error", "inconvenient"], "surprise": ["money"], "trust": ["money"]}}, {"id": 132, "src_idx": 116422, "title": "Tin dented", "text": "Came in slightly dented", "rating": 1.0, "cls": "negative", "sentiment": "neutral", "raw": "neutral sadness", "correct": false, "model_emotion": "sadness", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 133, "src_idx": 118345, "title": "INSISTS ON CHARGING MY PURCHASES ON AMAZON AGAINST THE GIFT ...", "text": "INSISTS ON CHARGING MY PURCHASES ON AMAZON AGAINST THE GIFT CARD WHICH I HAD GIVEN TO SOMEONE AS A GIFT, MAKING ME RELOAD THE GIFT CARD EVERY TIME I MADE A PURCHASE..", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 4, "disgust": 0, "fear": 0, "joy": 3, "sadness": 0, "surprise": 3, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift", "gift", "time"], "disgust": [], "fear": [], "joy": ["gift", "gift", "gift"], "sadness": [], "surprise": ["gift", "gift", "gift"], "trust": []}}, {"id": 134, "src_idx": 122216, "title": "This is lame", "text": "This is so worthless. It tells you nothing anywhere.<br /><br />On top of this train wreck, they continue to not send me my statements.<br /><br />I would give it minus stars if I could.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anger", "nrc_tallies": {"anger": 2, "anticipation": 2, "disgust": 2, "fear": 1, "joy": 0, "sadness": 2, "surprise": 1, "trust": 2}, "nrc_matched": {"anger": ["worthless", "wreck"], "anticipation": ["top", "continue"], "disgust": ["worthless", "wreck"], "fear": ["wreck"], "joy": [], "sadness": ["worthless", "wreck"], "surprise": ["wreck"], "trust": ["top", "continue"]}}, {"id": 135, "src_idx": 130981, "title": "Avoid and Do Not Use", "text": "It's been a while since I have bought these. I decided to pull one out and use it for a Christmas present this year to avoid a trip to a store for one card. Big mistake. Claim code couldn't be used by the recipient and customer service told her the one who purchased it had to be the one to call in about it. Customer service couldn't make it work. I was told the serial number should only be 16 digits. Not only does the serial number on the card match the serial number that appears in the \"My Orders\" section, but the description page for the Flex card also says the serial number is 19 digits. While customer service was able to make it right, by canceling the order so I could resent (by e-gift method this time), this was a hassle that should have been able to be avoided. I get the impression that either 1) these were phased out (going by the \"Currently Unavailable\" message) and no one bothered to block the cards that were still floating around from being loaded or 2) the Flex cards (being different from cards bought in a store) have a different method to be load to accounts and no one bothered to differentiate it anywhere on the site making it impossible to load them to accounts. I like the concept behind them and I have used them before; but at this point, I will toss any I still have and recommend others do as well.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 10, "disgust": 0, "fear": 1, "joy": 2, "sadness": 2, "surprise": 3, "trust": 4}, "nrc_matched": {"anger": ["resent"], "anticipation": ["present", "store", "recipient", "serial", "serial", "serial", "serial", "gift", "time", "store"], "disgust": [], "fear": ["avoid"], "joy": ["present", "gift"], "sadness": ["mistake", "impossible"], "surprise": ["present", "trip", "gift"], "trust": ["present", "accounts", "accounts", "recommend"]}}, {"id": 136, "src_idx": 133034, "title": "Gift Card - shipping problem", "text": "Ordered a $150 boxed gift card on 2-13 with 1 click ordering. The gift card page and the individual item page all say \"free one day shipping\" everywhere. On 2-15 receive an email that the card has shipped, with a tracking number, by USPS, with estimated delivery of 2-21, from MARYLAND. I'm in Seattle - the home of Amazon - and they ship by regular snail mail from MARYLAND??? Of course, since it has shipped, there is nothing I can do to change it and I'll miss the birthday on the 18th it was purchased for.<br /><br />BUYERS BEWARE you don't get caught by the same thing. One day free shipping apparently doesn't work with 1 click ordering. I'll never order another gift card from Amazon.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 8, "disgust": 0, "fear": 2, "joy": 4, "sadness": 0, "surprise": 4, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift", "gift", "delivery", "ship", "mail", "birthday", "beware", "gift"], "disgust": [], "fear": ["change", "beware"], "joy": ["gift", "gift", "birthday", "gift"], "sadness": [], "surprise": ["gift", "gift", "birthday", "gift"], "trust": []}}, {"id": 137, "src_idx": 135610, "title": "I upload $200.00 and I only got $150 worst thing ever", "text": "I pay for $200.00 and I only got $150.00 never again", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["pay"], "disgust": [], "fear": [], "joy": ["pay"], "sadness": [], "surprise": [], "trust": ["pay"]}}, {"id": 138, "src_idx": 136004, "title": "Not activated and a scam", "text": "Tried to redeem on website, like it says in the directions, and it stated that the  code hasn’t been activated and to see retailer, but i can’t directly contact the seller to get it activate. Epic games and amazon support was no help either.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 139, "src_idx": 138492, "title": "Not timely and no help", "text": "ordered on 12/21. Said we would receive it 12/23. Still don't have it on 12/28.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 140, "src_idx": 139657, "title": "I couldnt use the card", "text": "ordered a gift card and when it arrived i couldnt use it because it wasent activated from the place of purchase i hate to leave a review like this but its the truth", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "sadness", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 1, "fear": 1, "joy": 1, "sadness": 2, "surprise": 2, "trust": 1}, "nrc_matched": {"anger": ["hate"], "anticipation": ["gift"], "disgust": ["hate"], "fear": ["hate"], "joy": ["gift"], "sadness": ["hate", "leave"], "surprise": ["gift", "leave"], "trust": ["truth"]}}, {"id": 141, "src_idx": 141771, "title": "Do not buy!", "text": "When removing tape to reveal code , the tape pulls off the code and card is useless!  Called Amazon and they replaced, but same thing happened. Very upsetting.  Calling Amazon again. Had to put a star or I would not have put any.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 1, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["star"], "disgust": [], "fear": [], "joy": ["star"], "sadness": [], "surprise": [], "trust": ["star"]}}, {"id": 142, "src_idx": 143337, "title": "review of the 3 pack of gift cards.", "text": "I would have preferred to be able to purchase in either $ 25.00 dollar increments.  The $ 15.00 for 3 or $75.00 was  inconvenient as I really wanted $ 50.00 but I wasn't offered that option.  Now the option might have been there and I just didn't see how to acccess it.", "rating": 2.0, "cls": "negative", "sentiment": "neutral", "raw": "neutral trust", "correct": false, "model_emotion": "trust", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 0, "disgust": 1, "fear": 0, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": ["inconvenient"], "anticipation": [], "disgust": ["inconvenient"], "fear": [], "joy": [], "sadness": ["inconvenient"], "surprise": [], "trust": []}}, {"id": 143, "src_idx": 145143, "title": "Card slips into the box", "text": "When this gift box was delivered, gift card slid into the box and it was initially misleading that we thought the card was missing. Only after pulling apart the gift box could we actually get the card out.", "rating": 2.0, "cls": "negative", "sentiment": "neutral", "raw": "neutral surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 1, "anticipation": 4, "disgust": 1, "fear": 1, "joy": 3, "sadness": 1, "surprise": 3, "trust": 0}, "nrc_matched": {"anger": ["misleading"], "anticipation": ["gift", "gift", "thought", "gift"], "disgust": ["misleading"], "fear": ["missing"], "joy": ["gift", "gift", "gift"], "sadness": ["missing"], "surprise": ["gift", "gift", "gift"], "trust": []}}, {"id": 144, "src_idx": 147326, "title": "Fraud Alert", "text": "Card will not activate on the portal. They dont even tell you why, I checked the recapcha is not loading because EVERY browser has protections against that. IT JUST WONT ACTIVATE. Tried over multiple days, tried calling the only, ONLY number they provide only to be told that the card info is wrong! Go figure!. This product should be banned.", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 1}, "nrc_matched": {"anger": [], "anticipation": ["wont"], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": ["provide"]}}, {"id": 145, "src_idx": 147780, "title": "One Star", "text": "Very bad", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 0, "disgust": 1, "fear": 1, "joy": 0, "sadness": 1, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": ["bad"], "anticipation": [], "disgust": ["bad"], "fear": ["bad"], "joy": [], "sadness": ["bad"], "surprise": [], "trust": []}}, {"id": 146, "src_idx": 148792, "title": "One Star", "text": "Keep me posted", "rating": 1.0, "cls": "negative", "sentiment": "neutral", "raw": "neutral surprise", "correct": false, "model_emotion": "surprise", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 147, "src_idx": 149326, "title": "Opened card", "text": "Gift card was tampered and dirty. Barcode was opened", "rating": 2.0, "cls": "negative", "sentiment": "negative", "raw": "negative disgust", "correct": true, "model_emotion": "disgust", "nrc_emotion": "anticipation", "nrc_tallies": {"anger": 0, "anticipation": 1, "disgust": 1, "fear": 0, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": ["gift"], "disgust": ["dirty"], "fear": [], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}, {"id": 148, "src_idx": 150318, "title": "They froze my account for a couple days", "text": "They seed they would look into it and send me a email they never did", "rating": 2.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "none", "nrc_tallies": {"anger": 0, "anticipation": 0, "disgust": 0, "fear": 0, "joy": 0, "sadness": 0, "surprise": 0, "trust": 0}, "nrc_matched": {"anger": [], "anticipation": [], "disgust": [], "fear": [], "joy": [], "sadness": [], "surprise": [], "trust": []}}, {"id": 149, "src_idx": 151496, "title": "Dont use this option", "text": "I had to fight them to get my refund on defective item said they do not refund gift cards, i haven't received refund yet", "rating": 1.0, "cls": "negative", "sentiment": "negative", "raw": "negative anger", "correct": true, "model_emotion": "anger", "nrc_emotion": "anger", "nrc_tallies": {"anger": 1, "anticipation": 1, "disgust": 1, "fear": 1, "joy": 1, "sadness": 0, "surprise": 1, "trust": 0}, "nrc_matched": {"anger": ["fight"], "anticipation": ["gift"], "disgust": ["defective"], "fear": ["fight"], "joy": ["gift"], "sadness": [], "surprise": ["gift"], "trust": []}}];
+const ORDERC = ["anger", "anticipation", "disgust", "fear", "joy", "sadness", "surprise", "trust", "other:frustration", "none"];
+const MODEL_DIST = [49, 0, 8, 3, 27, 10, 10, 42, 1, 0];
+const NRC_DIST   = [10, 70, 0, 3, 14, 4, 1, 9, 0, 39];
+const E_AGREE = 15, E_NONE = 39, N = 150;
+const CLS_ORDER = ["positive","neutral","negative"];
+const CLS_KEY = {"positive":"ok","neutral":"neu","negative":"bad"};
+const PILL = {"anger":"bad","anticipation":"nl","disgust":"bad","fear":"bad","joy":"ok","sadness":"bad","surprise":"nl","trust":"ok","none":"nr"};
+const EMO8 = ["anger","anticipation","disgust","fear","joy","sadness","surprise","trust"];
+
+(function(){
+  const svgNS="http://www.w3.org/2000/svg";
+  const host=document.getElementById("donut");
+  const R=86,C=2*Math.PI*R, svg=document.createElementNS(svgNS,"svg");
+  svg.setAttribute("width",200);svg.setAttribute("height",200);
+  const mk=(color,frac,off)=>{ const c=document.createElementNS(svgNS,"circle");
+    c.setAttribute("cx",100);c.setAttribute("cy",100);c.setAttribute("r",R);c.setAttribute("fill","none");
+    c.setAttribute("stroke",color);c.setAttribute("stroke-width",26);
+    c.setAttribute("stroke-dasharray",(frac*C).toFixed(1)+" "+(C).toFixed(1));
+    c.setAttribute("stroke-dashoffset",-off*C);c.setAttribute("stroke-linecap","round");return c; };
+  const ok=102/N;
+  const okC=getComputedStyle(document.documentElement).getPropertyValue("--ok")||"#1f7a5c";
+  const badC=getComputedStyle(document.documentElement).getPropertyValue("--bad")||"#b0503c";
+  svg.appendChild(mk(okC,ok,0)); svg.appendChild(mk(badC,1-ok,ok));
+  host.appendChild(svg);
+  const c=document.createElement("div");c.className="center";
+  c.innerHTML='<div class="big">'+(68.0)+'%</div><div class="cap">matched</div>';
+  host.appendChild(c);
+})();
+
+function distChart(id,series){ const host=document.getElementById(id);
+  const m=Math.max.apply(null,series)||1;
+  ORDERC.forEach((k,i)=>{ if(series[i]===0)return;
+    const d=document.createElement("div");d.className="drow";
+    d.innerHTML='<span>'+k+'</span><div class="dbar"><div style="width:'+Math.max(100*series[i]/m,3)+'%"></div></div><span class="dcnt">'+series[i]+'</span>';
+    host.appendChild(d); }); }
+distChart("distModel",MODEL_DIST); distChart("distNrc",NRC_DIST);
+document.getElementById("diffCount").textContent = (N - E_AGREE);
+
+const tbody=document.getElementById("tbody"); const bigcount=document.getElementById("bigcount"); const countsub=document.getElementById("countsub");
+const state={"result":"all","cls":"all","stars":"all","emo":"all"};
+const stars2=s=>"★".repeat(Math.round(s));
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function sentPill(v){ return '<span class="pill '+CLS_KEY[v]+'">'+v+'</span>'; }
+function emoPill(v){ const k=PILL[v]||"bad"; return '<span class="pill '+k+'">'+v+'</span>'; }
+function emAg(r){ return r["model_emotion"] in PILL && r["model_emotion"] !== "none" && r["model_emotion"]===r["nrc_emotion"]; }
+
+function matches(r){
+  const ok=r.correct;
+  if(state["result"]==="ok"&&!ok)return false;
+  if(state["result"]==="miss"&&ok)return false;
+  if(state["cls"]!=="all"&&r["cls"]!==state["cls"])return false;
+  if(state["stars"]!=="all"&&Math.round(r["rating"])!==Number(state["stars"]))return false;
+  if(state["emo"]==="agree"&&!emAg(r))return false;
+  if(state["emo"]==="differ"&&emAg(r))return false;
+  return true;
+}
+function apply(){
+  const show=ROWS.filter(matches);
+  const ok=show.filter(r=>r.correct).length;
+  const ea=show.filter(emAg).length;
+  const byc={positive:0,neutral:0,negative:0};
+  show.forEach(r=>byc[r["cls"]]++);
+  tbody.innerHTML="";
+  show.forEach(r=>{
+    const tr=document.createElement("tr");
+    if(!r.correct)tr.className="missrow"; else if(!emAg(r))tr.className="agX";
+    tr.innerHTML='<td class="idx">'+r.id+'</td>'+
+      '<td class="stars">'+stars2(r.rating)+'</td>'+
+      '<td>'+sentPill(r.cls)+'</td><td>'+sentPill(r.sentiment)+'</td>'+
+      '<td>'+emoPill(r.model_emotion)+'</td><td>'+emoPill(r.nrc_emotion)+'</td>'+
+      '<td>'+(emAg(r)?'<span class="pill ok">agree</span>':'<span class="pill bad">differ</span>')+'</td>'+
+      '<td class="tt"><span class="t">'+esc(r.title)+'</span><br><span class="x">'+esc(r.text)+'</span></td>';
+    tbody.appendChild(tr);
+  });
+  bigcount.innerHTML='<span class="em">'+show.length+'</span> of '+ROWS.length+' reviews';
+  countsub.innerHTML=(show.length===ROWS.length?'All reviews':'Showing '+show.length+' of '+ROWS.length)+
+    ' &middot; <span class="ok2">'+ok+' matched</span> &middot; <span class="m2">'+(show.length-ok)+' mismatched</span>'+
+    ' &middot; <span class="n3">pos '+byc["positive"]+'</span> / <span class="n3">neu '+byc["neutral"]+'</span> / <span class="m2">neg '+byc["negative"]+'</span>'+
+    ' &middot; emotion <span class="ok2">'+ea+' agree</span> / <span class="m2">'+(show.length-ea)+' differ</span>';
+}
+document.querySelectorAll(".controls").forEach(g=>{
+  const gn=g.dataset.group;
+  g.querySelectorAll(".seg-btn").forEach(b=>b.addEventListener("click",()=>{
+    g.querySelectorAll(".seg-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); state[gn]=b.dataset.val; apply();
+  }));
+});
+console.assert(ROWS.filter(r=>r.correct).length===102,"agree mismatch");
+console.assert(ROWS.length===150,"row mismatch");
+apply();
+</script>
+</body>
+</html>
